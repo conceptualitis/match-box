@@ -7,5 +7,9 @@
   "preferGlobal": "true",
   "bin": {
     "matchswitch": "bin/matchswitch.js"
+  },
+  "dependencies": {
+    "minimist": "0.0.8",
+    "q": "^1.0.1"
   }
 }
