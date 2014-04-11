@@ -1,0 +1,11 @@
+{
+  "name": "match-box",
+  "version": "0.0.1",
+  "description": "A collection of tools for OSX developers working with .NET",
+  "author": "Neil Duffy",
+  "license": "MIT",
+  "preferGlobal": "true",
+  "bin": {
+    "matchswitch": "bin/matchswitch.js"
+  }
+}
