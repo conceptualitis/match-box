@@ -4,12 +4,17 @@
   "description": "A collection of tools for OSX developers working with .NET",
   "author": "Neil Duffy",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/conceptualitis/match-box.git"
+  },
   "preferGlobal": "true",
   "bin": {
     "matchswitch": "bin/matchswitch.js"
   },
   "dependencies": {
     "minimist": "0.0.8",
-    "q": "^1.0.1"
+    "q": "^1.0.1",
+    "nconf": "^0.6.9"
   }
 }
