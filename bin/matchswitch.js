@@ -8,6 +8,7 @@ var fs = require('fs'),
     readFile = q.denodeify(fs.readFile),
     writeFile = q.denodeify(fs.writeFile),
     exec = q.denodeify(require('child_process').exec),
+    spawn = require('child_process').spawn,
     environment = argv._[0],
     baseHosts;
 
@@ -26,18 +27,69 @@ if (argv._[0] == 'set') {
     return;
 }
 
+if (!process.env.SUDO_UID) {
+    console.log('Please run this with sudo');
+    return;
+}
+
+// mount a network drive with hosts files
+if (nconf.get('sambaLocation') && argv.updatehosts) {
+    if (!fs.existsSync('/Volumes/match-box')) {
+        fs.mkdirSync('/Volumes/match-box');
+    }
+
+    // mount the drive
+    exec('mount -t smbfs ' + nconf.get('sambaLocation') + ' /Volumes/match-box')
+        .then(function () {
+            // read the directories
+            // looking for the envName/hosts format
+            fs.readdirSync('/Volumes/match-box').forEach(function (val, i) {
+                if (fs.existsSync('/Volumes/match-box/' + val + '/hosts')) {
+                    fs.createReadStream('/Volumes/match-box/' + val + '/hosts').pipe(fs.createWriteStream('/etc/hosts.match' + val.toLowerCase()));
+                }
+            });
+
+            return exec('umount /Volumes/match-box');
+        }).then(function () {
+            // clean up the temp directory
+            fs.rmdirSync('/Volumes/match-box');
+        });
+}
+
 
 (function () {
+    var df = q.defer(), dStream, dList;
+    
     // use the VM ID or find it
     if (!nconf.get('vm')) {
-        return exec('prlctl list')
-            .then(function (stdout) {
-                nconf.set('vm', /{(\S+)}/gi.exec(stdout)[1]);
-                nconf.save();
-                return exec('prlctl exec ' + nconf.get('vm') + ' ipconfig');
+        dList = spawn('prlctl', ['list'], {
+            uid: process.env.SUDO_UID - 0
+        });
+
+        dList.stdout.on('data', function (stdout) {
+            nconf.set('vm', /{(\S+)}/gi.exec(stdout.toString())[1]);
+            nconf.save();
+
+            dStream = spawn('prlctl', ['exec', nconf.get('vm'), 'ipconfig'], {
+                uid: process.env.SUDO_UID - 0
             });
+
+            dStream.stdout.on('data', function (data) {
+                df.resolve(data.toString());
+            });
+        });
+    } else {
+        dStream = spawn('prlctl', ['exec', nconf.get('vm'), 'ipconfig'], {
+            uid: process.env.SUDO_UID - 0
+        });
+
+        dStream.stdout.on('data', function (data) {
+            df.resolve(data.toString());
+        });
     }
-    return exec('prlctl exec ' + nconf.get('vm') + ' ipconfig');
+
+
+    return df.promise;
 })().then(function (stdout) {
         var reg = /ipv4 address[\.\s]+:\s+([\.0-9]+)/gi,
             matches, ip;
