@@ -10,7 +10,7 @@ var fs = require('fs'),
     exec = q.denodeify(require('child_process').exec),
     spawn = require('child_process').spawn,
     environment = argv._[0],
-    baseHosts;
+    baseHosts, newHosts;
 
 // set up defaults
 nconf.defaults({
@@ -119,8 +119,53 @@ if (nconf.get('sambaLocation') && argv.updatehosts) {
         // open the file containing the match info
         return readFile('/etc/hosts.match' + environment);
     }).then(function (data) {
+        var df = q.defer(), winWrite = [], hostsCmd = [], pos = 0, cmdlimit = 1850; // windows cmd has limit of INTERNET_MAX_URL_LENGTH ( ~2048 characters )
         // combine the host files
-        return writeFile('/etc/hosts', baseHosts + data.toString());
+        newHosts = baseHosts + data.toString();
+
+        // function to write to the VM
+        var writeSection = function (cmds, i) {
+            // write the command chunk into the VM's temp file
+            var child = spawn('prlctl', ['exec', nconf.get('vm'), 'cmd', '/c', 'powershell.exe', '-Command', cmds[i]], {
+                uid: process.env.SUDO_UID - 0
+            });
+            // when it's written, move to the next chunk
+            child.on('close', function (code) {
+                i += 1;
+                
+                if (i === cmds.length) {
+                    // when all of them are written we copy the temp file's contents to hosts, was unable to edit hosts directly so this is a workaround
+                    var child = spawn('prlctl', ['exec', nconf.get('vm'), 'cmd', '/c', 'copy', '/y', 'C:\\.match-box.tmp', 'C:\\Windows\\System32\\drivers\\etc\\hosts'], {
+                        uid: process.env.SUDO_UID - 0
+                    });
+                    child.on('close', function (code) {
+                        df.resolve();
+                    });
+                } else {
+                    writeSection(cmds, i);
+                }
+            });
+        };
+
+        // break hosts file into chunks smaller than 2048, so we can write them on the command line
+        hostsCmd[0] = "'' | Out-File '.match-box.tmp'; ";
+        newHosts.split('\n').forEach(function (val, i) {
+            hostsCmd[pos] += "'" + val.trim() + "' | Out-File '.match-box.tmp' -Append; ";
+
+            if (hostsCmd[pos].length >= cmdlimit) {
+                pos += 1;
+                hostsCmd[pos] = '';
+            }
+        });
+
+        console.log("Writing hosts file to VM...");
+        writeSection(hostsCmd, 0);
+
+        return df.promise;
+    }).then(function () {
+        // write locally
+        console.log("Writing hosts locally...");
+        return writeFile('/etc/hosts', newHosts);
     }).then(function () {
         // flush the DNS cache
         exec('dscacheutil -flushcache');
