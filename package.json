@@ -1,6 +1,6 @@
 {
   "name": "match-box",
-  "version": "0.0.2",
+  "version": "0.1.1",
   "description": "A collection of tools for OSX developers working with .NET",
   "author": "Neil Duffy",
   "license": "MIT",
@@ -15,6 +15,7 @@
   "dependencies": {
     "minimist": "0.0.8",
     "q": "^1.0.1",
-    "nconf": "^0.6.9"
+    "nconf": "^0.6.9",
+    "colors": "^0.6.2"
   }
 }
