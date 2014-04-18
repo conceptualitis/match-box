@@ -32,7 +32,7 @@ nconf.file({ file: path.join(process.env.HOME, '.match-box') });
 // set keys
 if (argv._[0] == 'set') {
     if (argv._[1] === undefined) {
-        console.error('You need to pass a key to set!'.red);
+        console.error('You need to pass a key to set!'.error);
         return;
     }
     nconf.set(argv._[1], argv._[2] || true);
@@ -44,7 +44,7 @@ if (argv._[0] == 'set') {
 
 // needs to be run with sudo
 if (!process.env.SUDO_UID) {
-    console.error('Please run matchswitch with sudo.'.red);
+    console.error('Please run matchswitch with sudo.'.error);
     return;
 }
 
@@ -120,7 +120,7 @@ if (argv.updatehosts || argv._[0] == 'updatehosts') {
     
     // no location defined...
     if (!nconf.get('sambaLocation')) {
-        console.error('You need to define a network drive.'.red);
+        console.error('You need to define a network drive.'.error);
         console.log('Try running: matchswitch set sambaLocation [driveLocation]');
         return;
     }
@@ -268,10 +268,40 @@ getVMID().then(getVMIP).then(function () {
 
         return df.promise;
     }).then(function () {
+        // flush dns
+        var def = q.defer();
+
+        console.log('Flushing VM DNS...'.progress);
+
+        var child = spawn('prlctl', ['exec', nconf.get('vm'), 'cmd', '/c', 'ipconfig', '/flushdns'], {
+            uid: process.env.SUDO_UID - 0
+        });
+        child.on('close', function (code) {
+            def.resolve();
+        });
+
+        return def.promise;
+    }).then(function () {
+        // restart iis
+        var def = q.defer();
+
+        console.log('Restarting IIS...'.progress);
+
+        var child = spawn('prlctl', ['exec', nconf.get('vm'), 'cmd', '/c', 'iisreset', '/noforce'], {
+            uid: process.env.SUDO_UID - 0
+        });
+        child.on('close', function (code) {
+            def.resolve();
+        });
+
+        return def.promise;
+    }).then(function () {
         // write locally
         console.log('Writing hosts locally...'.progress);
         return writeFile('/etc/hosts', newHosts);
     }).then(function () {
         // flush the DNS cache
-        exec('dscacheutil -flushcache');
+        return exec('dscacheutil -flushcache');
+    }).then(function () {
+        console.log('Done!'.success);
     });
