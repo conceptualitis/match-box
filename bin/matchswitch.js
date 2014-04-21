@@ -21,13 +21,16 @@ colors.setTheme({
     progress: 'yellow'
 });
 
-// set up defaults
-nconf.defaults({
-    address: 'match.dev'
-});
 
 // find the settings file
 nconf.file({ file: path.join(process.env.HOME, '.match-box') });
+
+// set up defaults
+nconf.defaults({
+    'address': 'match.dev',
+    'vm.prop': true
+});
+
 
 // set keys
 if (argv._[0] == 'set') {
@@ -35,10 +38,15 @@ if (argv._[0] == 'set') {
         console.error('You need to pass a key to set!'.error);
         return;
     }
-    nconf.set(argv._[1], argv._[2] || true);
+
+    if (argv._[2] === undefined) {
+        argv._[2] = true;
+    }
+
+    nconf.set(argv._[1], (argv._[2] === 'true' || argv._[2] === 'false') ? argv._[2] === 'true' : argv._[2]);
     nconf.save();
 
-    console.log((argv._[1] + ': ' + nconf.get(argv._[1])).success);
+    console.log((argv._[1] + ': ' + argv._[2] || true).success);
     return;
 }
 
@@ -171,8 +179,12 @@ if (argv.updatehosts || argv._[0] == 'updatehosts') {
         .then(function () {
             var def = q.defer();
 
-            // write hosts to the vm, one chunk at a time
-            writeHostsToVM(def, 0);
+            if (nconf.get('vm.prop')) {
+                // write hosts to the vm, one chunk at a time
+                writeHostsToVM(def, 0);
+            } else {
+                def.resolve();
+            }
 
             return def.promise;
         }).then(function () {
@@ -281,13 +293,17 @@ getVMID().then(getVMIP).then(function () {
         // combine the host files
         newHosts = baseHosts + data.toString();
 
-        console.log('Writing hosts file on VM...'.progress);
-        var child = spawn('prlctl', ['exec', nconf.get('vm'), 'cmd', '/c', 'copy', '/y', 'C:\\.match-box.' + environment, 'C:\\Windows\\System32\\drivers\\etc\\hosts'], {
-            uid: process.env.SUDO_UID - 0
-        });
-        child.on('close', function (code) {
+        if (nconf.get('vm.prop')) {
+            console.log('Writing hosts file on VM...'.progress);
+            var child = spawn('prlctl', ['exec', nconf.get('vm'), 'cmd', '/c', 'copy', '/y', 'C:\\.match-box.' + environment, 'C:\\Windows\\System32\\drivers\\etc\\hosts'], {
+                uid: process.env.SUDO_UID - 0
+            });
+            child.on('close', function (code) {
+                df.resolve();
+            });
+        } else {
             df.resolve();
-        });
+        }
 
         return df.promise;
     }).then(function () {
