@@ -56,7 +56,19 @@ if (!process.env.SUDO_UID) {
     return;
 }
 
+// revert to old hosts
+if (argv._[0] == 'clear') {
+    console.log('Reverting to original hosts'.progress);
 
+    readFile('/etc/hosts.matchbackup')
+        .then(function (oldHosts) {
+            fs.writeFile('/etc/hosts', oldHosts);
+            console.log('Done!'.success);
+        }, function () {
+            console.log('No hosts file found, create with the updatehosts command.'.error);
+        });
+    return;
+}
 
 
 // break hosts file into chunks smaller than 2048, so we can write them on the command line
