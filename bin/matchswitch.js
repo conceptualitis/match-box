@@ -76,7 +76,7 @@ var writeHostsLocally = function (directory) {
     read = fs.createReadStream('/Volumes/match-box/' + directory + '/hosts');
     read.pipe(fs.createWriteStream('/etc/hosts.match' + directory.toLowerCase()));
     read.on('end', function () {
-        hostCmds = hostCmds.concat(splitHosts(fs.readFileSync('/etc/hosts.match' + directory.toLowerCase()).toString(), '.match-box.' + directory.toLowerCase()));
+        loadHostsIntoCommands(directory);
         console.log(('Created hosts for ' + directory).progress);
         def.resolve();
     });
@@ -93,7 +93,7 @@ var writeHostsToVM = function (def, i) {
 
     process.stdout.clearLine();
     process.stdout.cursorTo(0);
-    process.stdout.write(('Writing to VM: ' +  Math.ceil(i / hostCmds.length * 100) + '%\n').progress);
+    process.stdout.write(('Writing to VM: ' +  Math.ceil(i / hostCmds.length * 100) + '%').progress);
 
     // when it's written, move to the next chunk
     child.on('close', function (code) {
@@ -107,6 +107,48 @@ var writeHostsToVM = function (def, i) {
     });
 };
 
+var loadHostsIntoCommands = function (directory) {
+    hostCmds = hostCmds.concat(splitHosts(fs.readFileSync('/etc/hosts.match' + directory.toLowerCase()).toString(), '.match-box.' + directory.toLowerCase()));
+};
+
+// ugh this could be better
+var tryNetworkDrive = function () {
+    // mount a drive if they've defined one
+    if (nconf.get('sambaLocation')) {
+        console.log(('Mounting network drive: ' + nconf.get('sambaLocation')).progress);
+        return exec('mount -t smbfs ' + nconf.get('sambaLocation') + ' /Volumes/match-box')
+                .then(function () {
+                    var writePromises = [];
+                    // read the directories
+                    // looking for the envName/hosts format
+                    fs.readdirSync('/Volumes/match-box').forEach(function (val, i) {
+                        if (fs.existsSync('/Volumes/match-box/' + val + '/hosts')) {
+                            writePromises.push(writeHostsLocally(val));
+                        }
+                    });
+
+                    return q.all(writePromises);
+                })
+                .then(function () {
+                    console.log(('Unmounting network drive: ' + nconf.get('sambaLocation')).progress);
+                    return exec('umount /Volumes/match-box');
+                });
+    }
+
+    var def = q.defer();
+
+    // read all the local hosts in prep for writing them to the VM
+    fs.readdirSync('/etc').forEach(function (val, i) {
+        if (val.indexOf('hosts.match') != -1 && val !== 'hosts.matchbackup') {
+            loadHostsIntoCommands(val.substring(11));
+        }
+    });
+
+    def.resolve();
+
+    return def.promise;
+};
+
 
 // mount a network drive with hosts files
 if (argv.updatehosts || argv._[0] == 'updatehosts') {
@@ -117,33 +159,16 @@ if (argv.updatehosts || argv._[0] == 'updatehosts') {
     if (typeof argv.updatehosts === 'string') {
         environment = argv.updatehosts;
     }
-    
-    // no location defined...
-    if (!nconf.get('sambaLocation')) {
-        console.error('You need to define a network drive.'.error);
-        console.log('Try running: matchswitch set sambaLocation [driveLocation]');
-        return;
-    }
 
     if (!fs.existsSync('/Volumes/match-box')) {
         fs.mkdirSync('/Volumes/match-box');
     }
 
-    // mount the drive
-    console.log(('Mounting network drive: ' + nconf.get('sambaLocation')).progress);
-    exec('mount -t smbfs ' + nconf.get('sambaLocation') + ' /Volumes/match-box')
+    tryNetworkDrive()
+        .fail(function () {
+            console.log('shoot');
+        })
         .then(function () {
-            var writePromises = [];
-            // read the directories
-            // looking for the envName/hosts format
-            fs.readdirSync('/Volumes/match-box').forEach(function (val, i) {
-                if (fs.existsSync('/Volumes/match-box/' + val + '/hosts')) {
-                    writePromises.push(writeHostsLocally(val));
-                }
-            });
-
-            return q.all(writePromises);
-        }).then(function () {
             var def = q.defer();
 
             // write hosts to the vm, one chunk at a time
@@ -151,11 +176,9 @@ if (argv.updatehosts || argv._[0] == 'updatehosts') {
 
             return def.promise;
         }).then(function () {
-            console.log(('Unmounting network drive: ' + nconf.get('sambaLocation')).progress);
-            return exec('umount /Volumes/match-box');
-        }).then(function () {
-            // clean up the temp directory
-            fs.rmdirSync('/Volumes/match-box');
+            if (argv._[0] == 'updatehosts') {
+                console.log('\nDone!'.success);
+            }
         });
 
     // in only matchswitch updatehosts was run, we exit here
