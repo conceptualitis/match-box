@@ -70,6 +70,12 @@ if (argv._[0] == 'clear') {
     return;
 }
 
+// hosts drive backwards compatibility, will be gone in 1.0.0
+if (nconf.get('sambaLocation') && !nconf.get('hosts.location')) {
+    nconf.set('hosts.location', nconf.get('sambaLocation'));
+    nconf.save();
+}
+
 
 // break hosts file into chunks smaller than 2048, so we can write them on the command line
 var splitHosts = function (source, destination) {
@@ -134,9 +140,9 @@ var loadHostsIntoCommands = function (directory) {
 // ugh this could be better
 var tryNetworkDrive = function () {
     // mount a drive if they've defined one
-    if (nconf.get('sambaLocation')) {
-        console.log(('Mounting network drive: ' + nconf.get('sambaLocation')).progress);
-        return exec('mount -t smbfs ' + nconf.get('sambaLocation') + ' /Volumes/match-box')
+    if (nconf.get('hosts.location')) {
+        console.log(('Mounting network drive: ' + nconf.get('hosts.location')).progress);
+        return exec('mount -t smbfs ' + nconf.get('hosts.location') + ' /Volumes/match-box')
                 .then(function () {
                     var writePromises = [];
                     // read the directories
@@ -150,7 +156,7 @@ var tryNetworkDrive = function () {
                     return q.all(writePromises);
                 })
                 .then(function () {
-                    console.log(('Unmounting network drive: ' + nconf.get('sambaLocation')).progress);
+                    console.log(('Unmounting network drive: ' + nconf.get('hosts.location')).progress);
                     return exec('umount /Volumes/match-box');
                 });
     }
