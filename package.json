@@ -1,7 +1,7 @@
 {
   "name": "match-box",
-  "version": "0.2.0",
-  "description": "A collection of tools for OSX developers working with .NET",
+  "version": "0.2.1",
+  "description": "A collection of tools for developers working with .NET on OSX",
   "author": "Neil Duffy",
   "license": "MIT",
   "repository": {
