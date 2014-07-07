@@ -19,13 +19,13 @@ Match switch can be used to change the hosts file on the Mac as well as the host
 
 With SMB drive:
 
-1.  Tell match switch where to find the hosts: `matchswitch set hosts.location smb://your.network/location/here`. Note: it looks for hosts files in the format of [env]/hosts, so something like america/hosts, brazil/hosts, etc.
+1.  Tell match switch where to find the hosts: `matchswitch set hosts.location smb://your.network/location/here`. Note: it walks your directories looking for files called 'hosts', so something like environtment1/america/hosts, environment2/brazil/hosts, etc.
 2. If you want to set a custom url (default is `match.dev`) to access in the browser, run: `matchswitch set address [your.url.here]`
 3. Pull in the latest hosts from the network and push them to your VM: `sudo matchswitch updatehosts`. This might take a while.
 
 Without SMB drive:
 
-1. Set up hosts in your /etc/hosts directory in this format: hosts.match[env], so something like hosts.matchamerica, hosts.matchbrazil, etc.
+1. Set up hosts in your /etc/hosts directory in this format: `matchswitch.whatever.name.here.hosts`
 2. If you want to set a custom url (default is `match.dev`) to access in the browser, run: `matchswitch set address [your.url.here]`
 3. Push the hosts to your VM: `sudo matchswitch updatehosts`. This might take a while.
 
@@ -33,9 +33,9 @@ Without SMB drive:
 
 `sudo matchswitch [env]`
 
-It's pretty simple. Match switch will take the environments from the network directory and use them. So, if you had hosts in the /america directory, you would switch like this:
+It's pretty simple. Match-switch will take the environments from the network directory and use them. So, if you had hosts in the /environment1/america directory, you would switch like this:
 
-`sudo matchswitch america`
+`sudo matchswitch environment1.america`
 
 ### Clearing Hosts
 
